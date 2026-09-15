@@ -9,6 +9,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 app.use(express.json({ limit: '32kb' }));
 
 const categories = ['メンタル', '自信', '協調性', 'リーダーシップ'];
+const speakers = ['村人A', '村人B', '村人C', '村長', '魔王'];
 const fallback = (note, job) => {
   const lower = note.toLowerCase();
   const category = lower.includes('友') || lower.includes('手伝') || lower.includes('相談') ? '協調性'
@@ -21,7 +22,7 @@ const fallback = (note, job) => {
     自信人: '今日できたことを一つ言葉にして、自分の実績として残そう。',
     協力人: '誰かの困りごとに気づいたら、具体的な一言を添えて声をかけよう。'
   };
-  return { summary: '今日の行動から、前に進む力が見えました。', progress: `${category}につながる行動を実践できています。`, tip: tips[job] || '明日も小さな一歩を積み重ねよう。', category, scoreChange: 2 };
+  return { summary: '今日の行動から、前に進む力が見えました。', progress: `${category}につながる行動を実践できています。`, tip: tips[job] || '明日も小さな一歩を積み重ねよう。', positive: '今日の一歩を、きちんと自分の成長として認めよう。', nextAction: tips[job] || '明日も小さな一歩を積み重ねよう。', speaker: '村長', category, scoreChange: 2 };
 };
 
 app.post('/api/analyze', async (req, res) => {
@@ -34,8 +35,8 @@ app.post('/api/analyze', async (req, res) => {
 なりたい職業: ${job || '未選択'}
 現在のステータス（メンタル、自信、協調性、リーダーシップ）: ${JSON.stringify(scores)}
 今日の記録: ${note.trim()}
-次のJSONだけを返してください。categoryは4カテゴリのいずれか、scoreChangeは行動の具体性と成長度に応じた1から3までの整数にしてください。小さな気づきは1、明確な実践は2、勇気のある挑戦や周囲への大きな貢献は3です。
-{"summary":"40字以内の要約","progress":"80字以内で伸びた理由","tip":"選んだ職業に近づく明日の具体的な行動を70字以内","category":"メンタル|自信|協調性|リーダーシップ","scoreChange":1}`;
+次のJSONだけを返してください。categoryは4カテゴリのいずれか、scoreChangeは行動の具体性と成長度に応じた1から3までの整数にしてください。小さな気づきは1、明確な実践は2、勇気のある挑戦や周囲への大きな貢献は3です。speakerは内容に合う登場人物を選んでください。
+{"summary":"40字以内の要約","progress":"80字以内で伸びた理由","positive":"書いた内容を肯定する温かい一言を60字以内で","nextAction":"次に試すとよい具体的な行動を70字以内で","tip":"nextActionと同じ内容","speaker":"村人A|村人B|村人C|村長|魔王","category":"メンタル|自信|協調性|リーダーシップ","scoreChange":1}`;
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -48,7 +49,8 @@ app.post('/api/analyze', async (req, res) => {
     const result = JSON.parse(text.replace(/^```json\s*|\s*```$/g, '').trim());
     if (!categories.includes(result.category)) throw new Error('Invalid category');
     const scoreChange = Math.max(1, Math.min(3, Math.round(Number(result.scoreChange) || 1)));
-    return res.json({ ...result, scoreChange });
+    const speaker = speakers.includes(result.speaker) ? result.speaker : '村長';
+    return res.json({ ...result, speaker, positive: result.positive || result.progress, nextAction: result.nextAction || result.tip, scoreChange });
   } catch {
     return res.status(502).json({ error: 'AI分析の結果を読み取れませんでした。もう一度お試しください。' });
   }
