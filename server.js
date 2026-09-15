@@ -22,7 +22,9 @@ const fallback = (note, job) => {
     自信人: '今日できたことを一つ言葉にして、自分の実績として残そう。',
     協力人: '誰かの困りごとに気づいたら、具体的な一言を添えて声をかけよう。'
   };
-  return { summary: '今日の行動から、前に進む力が見えました。', progress: `${category}につながる行動を実践できています。`, tip: tips[job] || '明日も小さな一歩を積み重ねよう。', positive: '今日の一歩を、きちんと自分の成長として認めよう。', nextAction: tips[job] || '明日も小さな一歩を積み重ねよう。', speaker: '村長', category, scoreChange: 2 };
+  const positive = 'いいじゃん！今日の一歩、ちゃんと成長につながってるぞ！';
+  const nextAction = tips[job] || '明日も小さな一歩を積み重ねよう！';
+  return { summary: '今日の行動から、前に進む力が見えたぞ！', progress: `${category}につながる行動、ばっちり実践できてる！`, tip: nextAction, positive, nextAction, speaker: '村長', reply: `${positive}\n${nextAction}`, category, scoreChange: 2 };
 };
 
 app.post('/api/analyze', async (req, res) => {
@@ -31,12 +33,13 @@ app.post('/api/analyze', async (req, res) => {
     return res.status(400).json({ error: '今日の記録を入力してください。' });
   }
   if (!process.env.CLAUDE_API_KEY) return res.json(fallback(note.trim(), job));
-  const prompt = `あなたは自己成長ゲーム「成長クエスト」の伴走者です。医療診断や断定はせず、行動を温かく具体的に認めてください。
+  const prompt = `  あなたは自己成長ゲーム「成長クエスト」に登場する、元気な仲間たちです。医療診断や断定はせず、行動を温かく具体的に認めてください。返事は敬語を使わず、友だちに話すような元気なタメ口にしてください。
 なりたい職業: ${job || '未選択'}
 現在のステータス（メンタル、自信、協調性、リーダーシップ）: ${JSON.stringify(scores)}
 今日の記録: ${note.trim()}
+登場人物ごとの口調を守ってください。村人A/B/Cは明るく元気に、村長は頼もしく熱く、魔王は「フハハハ！」のような威厳ある魔王口調にしてください。ただし内容は必ず前向きで、ユーザーの成長を応援してください。
 次のJSONだけを返してください。categoryは4カテゴリのいずれか、scoreChangeは行動の具体性と成長度に応じた1から3までの整数にしてください。小さな気づきは1、明確な実践は2、勇気のある挑戦や周囲への大きな貢献は3です。speakerは内容に合う登場人物を選んでください。
-{"summary":"40字以内の要約","progress":"80字以内で伸びた理由","positive":"書いた内容を肯定する温かい一言を60字以内で","nextAction":"次に試すとよい具体的な行動を70字以内で","tip":"nextActionと同じ内容","speaker":"村人A|村人B|村人C|村長|魔王","category":"メンタル|自信|協調性|リーダーシップ","scoreChange":1}`;
+{"summary":"40字以内の要約","progress":"80字以内で伸びた理由","positive":"登場人物の口調で書いた内容を肯定する一言を60字以内で","nextAction":"登場人物の口調で次に試す具体的な行動を70字以内で","tip":"nextActionと同じ内容","reply":"positiveとnextActionを含む、登場人物からの元気な返事を120字以内で","speaker":"村人A|村人B|村人C|村長|魔王","category":"メンタル|自信|協調性|リーダーシップ","scoreChange":1}`;
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -50,7 +53,9 @@ app.post('/api/analyze', async (req, res) => {
     if (!categories.includes(result.category)) throw new Error('Invalid category');
     const scoreChange = Math.max(1, Math.min(3, Math.round(Number(result.scoreChange) || 1)));
     const speaker = speakers.includes(result.speaker) ? result.speaker : '村長';
-    return res.json({ ...result, speaker, positive: result.positive || result.progress, nextAction: result.nextAction || result.tip, scoreChange });
+    const positive = result.positive || result.progress;
+    const nextAction = result.nextAction || result.tip;
+    return res.json({ ...result, speaker, positive, nextAction, reply: result.reply || `${positive}\n${nextAction}`, scoreChange });
   } catch {
     return res.status(502).json({ error: 'AI分析の結果を読み取れませんでした。もう一度お試しください。' });
   }
