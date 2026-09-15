@@ -1,0 +1,9 @@
+{
+  "name": "成長クエスト",
+  "short_name": "成長クエスト",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071c18",
+  "theme_color": "#071c18",
+  "description": "毎日の行動を冒険に変える自己分析RPG"
+}

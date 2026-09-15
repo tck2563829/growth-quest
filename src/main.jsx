@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { BookOpen, ChevronRight, CircleUserRound, Flame, Home, LogOut, RotateCcw, Sparkles, Swords, Trophy } from 'lucide-react';
 import './styles.css';
 
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+
 const JOBS = [
   { id: 'リーダー', icon: 'LEAD', catch: '周りを引っ張れる、カリスマのある存在', color: '#f4cf54', stat: 'リーダーシップ' },
   { id: '鋼メンタル', icon: 'IRON', catch: '並大抵のことでは動じない持ち主', color: '#72c6d0', stat: 'メンタル' },
