@@ -21,7 +21,7 @@ const fallback = (note, job) => {
     自信人: '今日できたことを一つ言葉にして、自分の実績として残そう。',
     協力人: '誰かの困りごとに気づいたら、具体的な一言を添えて声をかけよう。'
   };
-  return { summary: '今日の行動から、前に進む力が見えました。', progress: `${category}につながる行動を実践できています。`, tip: tips[job] || '明日も小さな一歩を積み重ねよう。', category, scoreChange: 3 };
+  return { summary: '今日の行動から、前に進む力が見えました。', progress: `${category}につながる行動を実践できています。`, tip: tips[job] || '明日も小さな一歩を積み重ねよう。', category, scoreChange: 2 };
 };
 
 app.post('/api/analyze', async (req, res) => {
@@ -34,8 +34,8 @@ app.post('/api/analyze', async (req, res) => {
 なりたい職業: ${job || '未選択'}
 現在のステータス（メンタル、自信、協調性、リーダーシップ）: ${JSON.stringify(scores)}
 今日の記録: ${note.trim()}
-次のJSONだけを返してください。categoryは4カテゴリのいずれか、scoreChangeは必ず3にしてください。
-{"summary":"40字以内の要約","progress":"80字以内で伸びた理由","tip":"選んだ職業に近づく明日の具体的な行動を70字以内","category":"メンタル|自信|協調性|リーダーシップ","scoreChange":3}`;
+次のJSONだけを返してください。categoryは4カテゴリのいずれか、scoreChangeは行動の具体性と成長度に応じた1から3までの整数にしてください。小さな気づきは1、明確な実践は2、勇気のある挑戦や周囲への大きな貢献は3です。
+{"summary":"40字以内の要約","progress":"80字以内で伸びた理由","tip":"選んだ職業に近づく明日の具体的な行動を70字以内","category":"メンタル|自信|協調性|リーダーシップ","scoreChange":1}`;
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -47,7 +47,8 @@ app.post('/api/analyze', async (req, res) => {
     const text = payload.content?.find((item) => item.type === 'text')?.text || '';
     const result = JSON.parse(text.replace(/^```json\s*|\s*```$/g, '').trim());
     if (!categories.includes(result.category)) throw new Error('Invalid category');
-    return res.json({ ...result, scoreChange: 3 });
+    const scoreChange = Math.max(1, Math.min(3, Math.round(Number(result.scoreChange) || 1)));
+    return res.json({ ...result, scoreChange });
   } catch {
     return res.status(502).json({ error: 'AI分析の結果を読み取れませんでした。もう一度お試しください。' });
   }
