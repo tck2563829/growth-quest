@@ -10,12 +10,20 @@ app.use(express.json({ limit: '32kb' }));
 
 const categories = ['メンタル', '自信', '協調性', 'リーダーシップ'];
 const speakers = ['村人A', '村人B', '村人C', '村長', '魔王'];
+const jobStats = { リーダー: 'リーダーシップ', 鋼メンタル: 'メンタル', 自信人: '自信', 協力人: '協調性' };
 const fallback = (note, job) => {
   const lower = note.toLowerCase();
-  const category = lower.includes('友') || lower.includes('手伝') || lower.includes('相談') ? '協調性'
-    : lower.includes('挑戦') || lower.includes('決め') || lower.includes('発表') ? '自信'
-    : lower.includes('落ち着') || lower.includes('耐') || lower.includes('失敗') ? 'メンタル'
-    : 'リーダーシップ';
+  const clues = {
+    メンタル: ['落ち着', '耐え', '耐え', '失敗', '不安', '緊張', '我慢', '立て直', '冷静'],
+    自信: ['挑戦', '決め', '発表', '意見', 'できた', '成功', '行動', '頑張', '初めて'],
+    協調性: ['友', '手伝', '相談', '聞い', '協力', '助け', '支え', 'チーム', '一緒'],
+    リーダーシップ: ['まとめ', '率先', '声をかけ', '任せ', '指示', '企画', 'リード', '引っ張']
+  };
+  const scores = categories.reduce((result, category) => {
+    result[category] = clues[category].reduce((score, clue) => score + (lower.includes(clue) ? 1 : 0), 0);
+    return result;
+  }, {});
+  const category = categories.reduce((best, candidate) => scores[candidate] > scores[best] ? candidate : best, jobStats[job] || 'メンタル');
   const tips = {
     リーダー: '明日は小さな役割でもいいので、最初に声をかけてみよう。',
     鋼メンタル: '予想外のことが起きても、まず深呼吸してから一つだけ対処しよう。',
@@ -47,17 +55,17 @@ app.post('/api/analyze', async (req, res) => {
       body: JSON.stringify({ model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929', max_tokens: 300, temperature: 0.3, messages: [{ role: 'user', content: prompt }] })
     });
     const payload = await response.json();
-    if (!response.ok) return res.status(502).json({ error: payload.error?.message || 'Claude APIに接続できませんでした。' });
+    if (!response.ok) return res.json(fallback(note.trim(), job));
     const text = payload.content?.find((item) => item.type === 'text')?.text || '';
     const result = JSON.parse(text.replace(/^```json\s*|\s*```$/g, '').trim());
-    if (!categories.includes(result.category)) throw new Error('Invalid category');
+    if (!categories.includes(result.category)) return res.json(fallback(note.trim(), job));
     const scoreChange = Math.max(1, Math.min(3, Math.round(Number(result.scoreChange) || 1)));
     const speaker = speakers.includes(result.speaker) ? result.speaker : '村長';
     const positive = result.positive || result.progress;
     const nextAction = result.nextAction || result.tip;
     return res.json({ ...result, speaker, positive, nextAction, reply: result.reply || `${positive}\n${nextAction}`, scoreChange });
   } catch {
-    return res.status(502).json({ error: 'AI分析の結果を読み取れませんでした。もう一度お試しください。' });
+    return res.json(fallback(note.trim(), job));
   }
 });
 
