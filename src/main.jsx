@@ -6,18 +6,22 @@ import './styles.css';
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
 
 const JOBS = [
+  { id: '無職', icon: 'NONE', catch: 'まだ何者でもない。ここから冒険が始まる', color: '#9ca27e', stat: null },
   { id: 'リーダー', icon: 'LEAD', catch: '周りを引っ張れる、カリスマのある存在', color: '#f4cf54', stat: 'リーダーシップ' },
   { id: '鋼メンタル', icon: 'IRON', catch: '並大抵のことでは動じない持ち主', color: '#72c6d0', stat: 'メンタル' },
   { id: '自信人', icon: 'BOLD', catch: '圧倒的自信で、いつでも頼れる存在', color: '#ef8066', stat: '自信' },
-  { id: '協力人', icon: 'ALLY', catch: '周りをよく見て、支えるのが得意', color: '#a7d765', stat: '協調性' }
+  { id: '協力人', icon: 'ALLY', catch: '周りをよく見て、支えるのが得意', color: '#a7d765', stat: '協調性' },
+  { id: '最強', icon: 'MAX', catch: 'すべての力を極めた、究極の冒険者', color: '#ffef8a', stat: null }
 ];
-const getJobForStats = (stats) => {
-  const statToJob = Object.fromEntries(JOBS.map((item) => [item.stat, item.id]));
-  const bestStat = AI_STATS.reduce((best, stat) => stats[stat] > stats[best] ? stat : best, AI_STATS[0]);
-  return statToJob[bestStat] || JOBS[0].id;
-};
 const STATS = ['メンタル', '自信', '協調性', 'リーダーシップ', '継続力'];
 const AI_STATS = STATS.filter((name) => name !== '継続力');
+const getJobForStats = (stats) => {
+  if (STATS.every((stat) => Number(stats[stat] || 0) === 0)) return '無職';
+  if (STATS.every((stat) => Number(stats[stat] || 0) === 100)) return '最強';
+  const statToJob = Object.fromEntries(JOBS.filter((item) => item.stat).map((item) => [item.stat, item.id]));
+  const bestStat = AI_STATS.reduce((best, stat) => stats[stat] > stats[best] ? stat : best, AI_STATS[0]);
+  return statToJob[bestStat] || '無職';
+};
 const QUESTIONS = [
   ['緊張する場面でも、まず落ち着いて考えられる', 'メンタル'],
   ['自分の考えや選択を、胸を張って伝えられる', '自信'],
@@ -69,6 +73,7 @@ function App() {
     if (saved) { setState((s) => ({ ...s, ...saved, job: id, stats: { ...emptyState.stats, ...(saved.stats || {}) } })); setScreen('home'); }
     else { setState((s) => ({ ...s, job: id, stats: { ...emptyState.stats }, points: 0, level: 1, logs: [], lastAdventureDate: null })); setScreen('home'); }
   };
+  const retakeQuestionnaire = () => { setAnswers({}); setScreen('quiz'); };
   const finishQuiz = () => {
     const stats = { ...emptyState.stats };
     Object.entries(answers).forEach(([index, value]) => { const category = QUESTIONS[index][1]; stats[category] += Number(value) * 5; });
@@ -91,7 +96,7 @@ function App() {
       const response = await fetch('/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ note, job: state.job, scores: AI_STATS.map((name) => state.stats[name]) }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || '分析に失敗しました');
-      const category = AI_STATS.includes(result.category) ? result.category : job.stat;
+      const category = AI_STATS.includes(result.category) ? result.category : job?.stat || AI_STATS[0];
       const scoreChange = Math.max(1, Math.min(3, Math.round(Number(result.scoreChange) || 1)));
       const stats = { ...state.stats, [category]: Math.min(100, state.stats[category] + scoreChange) };
       const today = new Date().toLocaleDateString('sv-SE');
@@ -109,13 +114,13 @@ function App() {
     finally { setBusy(false); }
   };
   const logout = () => { setState((s) => ({ ...s, user: null })); setScreen('login'); };
-  const changeJob = () => setScreen('jobs');
+  const changeJob = retakeQuestionnaire;
   const navigate = (target) => setScreen(target);
 
   return <div className="app-shell">
     <header className="topbar"><div className="brand" onClick={() => state.job && setScreen('home')}><span className="brand-mark">✦</span><span>成長クエスト</span></div>{state.user && <button className="icon-button" onClick={logout} title="ログアウト"><LogOut size={18} /></button>}</header>
     <main>
-      {screen === 'jobs' && <section className="screen hero-screen"><div className="battle-scene"><div className="sun" /><div className="pixel-cloud cloud-one" /><div className="pixel-cloud cloud-two" /><div className="mountain" /><div className="dragon-silhouette" /><div className="party-silhouette"><i /><i /><i /></div></div><div className="command-window intro-command"><span className="command-caret">▶</span> 職業一覧から冒険を選んでください</div><p className="lead intro-lead">冒険の書のステータスに応じて、あなたの職業が決まります。</p><div className="job-grid">{JOBS.map((item) => <button className="job-card" style={{ '--accent': item.color }} key={item.id} onClick={() => selectJob(item.id)}><span className="job-icon">{item.icon}</span><span className="job-name">{item.id}</span><span className="job-catch">{item.catch}</span><span className="choose"><span className="command-caret">▶</span> 冒険を見る</span></button>)}</div></section>}
+      {screen === 'jobs' && <section className="screen hero-screen"><div className="battle-scene"><div className="sun" /><div className="pixel-cloud cloud-one" /><div className="pixel-cloud cloud-two" /><div className="mountain" /><div className="dragon-silhouette" /><div className="party-silhouette"><i /><i /><i /></div></div><div className="command-window intro-command"><span className="command-caret">▶</span> 職業一覧から冒険を選んでください</div><p className="lead intro-lead">職業を選び直すと、もう一度アンケートを受けられます。</p><div className="job-grid">{JOBS.map((item) => <button className="job-card" style={{ '--accent': item.color }} key={item.id} onClick={() => selectJob(item.id)}><span className="job-icon">{item.icon}</span><span className="job-name">{item.id}</span><span className="job-catch">{item.catch}</span><span className="choose"><span className="command-caret">▶</span> 冒険を見る</span></button>)}</div><button className="primary wide questionnaire-again" onClick={retakeQuestionnaire}>アンケートを受け直す <ChevronRight size={18} /></button></section>}
       {screen === 'quiz' && <section className="screen narrow"><p className="eyebrow">INITIAL STATUS</p><h2>冒険前のステータスを<br />チェックしよう</h2><p className="muted">今のあなたに近い答えを選んでください。</p><div className="quiz-list">{QUESTIONS.map(([question], index) => <div className="question" key={question}><p><span>{String(index + 1).padStart(2, '0')}</span>{question}</p><div className="choices">{[1, 2, 3, 4, 5].map((value) => <button className={answers[index] === value ? 'selected' : ''} onClick={() => setAnswers((a) => ({ ...a, [index]: value }))} key={value}>{value === 1 ? '全然ちがう' : value === 5 ? 'とてもそう' : value}</button>)}</div></div>)}</div><button className="primary wide" disabled={Object.keys(answers).length !== QUESTIONS.length} onClick={finishQuiz}>ステータスを決定する <ChevronRight size={18} /></button></section>}
       {screen === 'login' && <section className="screen narrow login-screen"><div className="quest-badge"><CircleUserRound size={28} /></div><p className="eyebrow">SAVE YOUR ADVENTURE</p><h2>冒険の記録を<br />保存しよう</h2><p className="muted">ログインすると成長ログを保存できます。ゲストは保存せずに遊べます。</p><form onSubmit={login} className="login-form"><label>メールアドレス<input type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label><label>パスワード<input type="password" placeholder="6文字以上" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength="6" /></label><button className="primary wide">{loginMode === 'login' ? 'ログインして保存する' : 'アカウントを作成'} <ChevronRight size={18} /></button></form><button className="guest-button" onClick={continueAsGuest}>ゲストとして遊ぶ（保存なし）</button><button className="text-button" onClick={() => setLoginMode(loginMode === 'login' ? 'signup' : 'login')}>{loginMode === 'login' ? 'はじめての方はこちら' : 'ログインはこちら'}</button><small>ゲストの進捗は、このブラウザを閉じると保存されません。</small></section>}
       {screen === 'home' && <section className="screen dashboard"><div className="dashboard-head"><div><p className="eyebrow">ADVENTURE STATUS</p><h2>おかえりなさい、<br /><em>{job?.id}</em>の冒険者。</h2></div><div className="level-orb"><span>LV</span><b>{progression.level}</b></div></div><div className="xp-row"><span>つぎのレベルまで</span><b>{progression.current}/{progression.required} EXP</b></div><div className="xp-bar"><i style={{ width: `${progression.current / progression.required * 100}%` }} /></div><div className="panel"><div className="panel-title"><span><Swords size={17} />ステータス</span><span className="job-chip" style={{ color: job?.color }}>{job?.icon} / {job?.id}</span></div><StatBars stats={state.stats} points={state.points} /></div><button className="quest-card" onClick={() => setScreen('log')}><span className="quest-icon">LOG</span><span><b>冒険の書</b><small>今日あったことを書いて、経験値を手に入れよう</small></span><ChevronRight /></button><div className="home-links"><button onClick={() => setScreen('history')}><BookOpen size={18} />成長のきろく <span>{state.logs.length}</span></button><button onClick={() => setScreen('jobs')}><Sparkles size={18} />職業を選び直す</button></div></section>}
