@@ -71,7 +71,7 @@ function App() {
   const retakeQuestionnaire = () => { setAnswers({}); setScreen('quiz'); };
   const finishQuiz = () => {
     const stats = { ...emptyState.stats };
-    Object.entries(answers).forEach(([index, value]) => { const category = QUESTIONS[index][1]; stats[category] += Number(value) * 5; });
+    Object.entries(answers).forEach(([index, value]) => { const category = QUESTIONS[index][1]; stats[category] += (Number(value) - 1) * 5; });
     const initialJob = getJobForStats(stats);
     setState((s) => ({ ...s, job: initialJob, stats, points: 0, level: 1, logs: [], lastAdventureDate: null, profiles: { ...s.profiles, [initialJob]: { stats, points: 0, level: 1, logs: [], lastAdventureDate: null } } }));
     setScreen('login');
