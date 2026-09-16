@@ -11,6 +11,11 @@ const JOBS = [
   { id: '自信人', icon: 'BOLD', catch: '圧倒的自信で、いつでも頼れる存在', color: '#ef8066', stat: '自信' },
   { id: '協力人', icon: 'ALLY', catch: '周りをよく見て、支えるのが得意', color: '#a7d765', stat: '協調性' }
 ];
+const getJobForStats = (stats) => {
+  const statToJob = Object.fromEntries(JOBS.map((item) => [item.stat, item.id]));
+  const bestStat = AI_STATS.reduce((best, stat) => stats[stat] > stats[best] ? stat : best, AI_STATS[0]);
+  return statToJob[bestStat] || JOBS[0].id;
+};
 const STATS = ['メンタル', '自信', '協調性', 'リーダーシップ', '継続力'];
 const AI_STATS = STATS.filter((name) => name !== '継続力');
 const QUESTIONS = [
@@ -48,7 +53,7 @@ function StatBars({ stats, points }) {
 
 function App() {
   const [state, setState] = useState(loadState);
-  const [screen, setScreen] = useState(() => loadState().job ? 'home' : 'jobs');
+  const [screen, setScreen] = useState(() => loadState().job ? 'home' : 'quiz');
   const [answers, setAnswers] = useState({});
   const [loginMode, setLoginMode] = useState('login');
   const [form, setForm] = useState({ email: '', password: '' });
@@ -62,12 +67,13 @@ function App() {
   const selectJob = (id) => {
     const saved = state.profiles?.[id];
     if (saved) { setState((s) => ({ ...s, ...saved, job: id, stats: { ...emptyState.stats, ...(saved.stats || {}) } })); setScreen('home'); }
-    else { setState((s) => ({ ...s, job: id })); setAnswers({}); setScreen('quiz'); }
+    else { setState((s) => ({ ...s, job: id, stats: { ...emptyState.stats }, points: 0, level: 1, logs: [], lastAdventureDate: null })); setScreen('home'); }
   };
   const finishQuiz = () => {
     const stats = { ...emptyState.stats };
     Object.entries(answers).forEach(([index, value]) => { const category = QUESTIONS[index][1]; stats[category] += Number(value) * 5; });
-    setState((s) => ({ ...s, stats, points: 0, level: 1, logs: [], lastAdventureDate: null, profiles: { ...s.profiles, [s.job]: { stats, points: 0, level: 1, logs: [], lastAdventureDate: null } } }));
+    const initialJob = getJobForStats(stats);
+    setState((s) => ({ ...s, job: initialJob, stats, points: 0, level: 1, logs: [], lastAdventureDate: null, profiles: { ...s.profiles, [initialJob]: { stats, points: 0, level: 1, logs: [], lastAdventureDate: null } } }));
     setScreen('login');
   };
   const login = (event) => {
@@ -85,7 +91,7 @@ function App() {
       const response = await fetch('/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ note, job: state.job, scores: AI_STATS.map((name) => state.stats[name]) }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || '分析に失敗しました');
-      const category = STATS.includes(result.category) ? result.category : job.stat;
+      const category = AI_STATS.includes(result.category) ? result.category : job.stat;
       const scoreChange = Math.max(1, Math.min(3, Math.round(Number(result.scoreChange) || 1)));
       const stats = { ...state.stats, [category]: Math.min(100, state.stats[category] + scoreChange) };
       const today = new Date().toLocaleDateString('sv-SE');
@@ -93,9 +99,10 @@ function App() {
       stats.継続力 = Math.min(100, stats.継続力 + continuityChange);
       const points = state.points + scoreChange;
       const nextProgression = getProgress(points);
+      const nextJob = getJobForStats(stats);
       const logs = [{ date: new Date().toLocaleDateString('ja-JP'), note, category, scoreChange, continuityChange, tip: result.tip, positive: result.positive, nextAction: result.nextAction, reply: result.reply, progress: result.progress, speaker: result.speaker }, ...state.logs].slice(0, 20);
-      const profiles = { ...state.profiles, [state.job]: { stats, points, level: nextProgression.level, logs, lastAdventureDate: today } };
-      setState((s) => ({ ...s, stats, points, level: nextProgression.level, logs, profiles, lastAdventureDate: today }));
+      const profiles = { ...state.profiles, [state.job]: { stats, points, level: nextProgression.level, logs, lastAdventureDate: today }, [nextJob]: { stats, points, level: nextProgression.level, logs, lastAdventureDate: today } };
+      setState((s) => ({ ...s, job: nextJob, stats, points, level: nextProgression.level, logs, profiles, lastAdventureDate: today }));
       setAnalysis({ ...result, category, scoreChange, nextLevel: nextProgression.level, leveled: nextProgression.level > getProgress(state.points).level });
       setNote('');
     } catch (error) { setAnalysis({ error: error.message }); }
@@ -108,7 +115,7 @@ function App() {
   return <div className="app-shell">
     <header className="topbar"><div className="brand" onClick={() => state.job && setScreen('home')}><span className="brand-mark">✦</span><span>成長クエスト</span></div>{state.user && <button className="icon-button" onClick={logout} title="ログアウト"><LogOut size={18} /></button>}</header>
     <main>
-      {screen === 'jobs' && <section className="screen hero-screen"><div className="battle-scene"><div className="sun" /><div className="pixel-cloud cloud-one" /><div className="pixel-cloud cloud-two" /><div className="mountain" /><div className="dragon-silhouette" /><div className="party-silhouette"><i /><i /><i /></div></div><div className="command-window intro-command"><span className="command-caret">▶</span> なりたい職業を えらんでください</div><p className="lead intro-lead">あなたの毎日を冒険に変える、成長クエスト。</p><div className="job-grid">{JOBS.map((item) => <button className="job-card" style={{ '--accent': item.color }} key={item.id} onClick={() => selectJob(item.id)}><span className="job-icon">{item.icon}</span><span className="job-name">{item.id}</span><span className="job-catch">{item.catch}</span><span className="choose"><span className="command-caret">▶</span> えらぶ</span></button>)}</div></section>}
+      {screen === 'jobs' && <section className="screen hero-screen"><div className="battle-scene"><div className="sun" /><div className="pixel-cloud cloud-one" /><div className="pixel-cloud cloud-two" /><div className="mountain" /><div className="dragon-silhouette" /><div className="party-silhouette"><i /><i /><i /></div></div><div className="command-window intro-command"><span className="command-caret">▶</span> 職業一覧から冒険を選んでください</div><p className="lead intro-lead">冒険の書のステータスに応じて、あなたの職業が決まります。</p><div className="job-grid">{JOBS.map((item) => <button className="job-card" style={{ '--accent': item.color }} key={item.id} onClick={() => selectJob(item.id)}><span className="job-icon">{item.icon}</span><span className="job-name">{item.id}</span><span className="job-catch">{item.catch}</span><span className="choose"><span className="command-caret">▶</span> 冒険を見る</span></button>)}</div></section>}
       {screen === 'quiz' && <section className="screen narrow"><p className="eyebrow">INITIAL STATUS</p><h2>冒険前のステータスを<br />チェックしよう</h2><p className="muted">今のあなたに近い答えを選んでください。</p><div className="quiz-list">{QUESTIONS.map(([question], index) => <div className="question" key={question}><p><span>{String(index + 1).padStart(2, '0')}</span>{question}</p><div className="choices">{[1, 2, 3, 4, 5].map((value) => <button className={answers[index] === value ? 'selected' : ''} onClick={() => setAnswers((a) => ({ ...a, [index]: value }))} key={value}>{value === 1 ? '全然ちがう' : value === 5 ? 'とてもそう' : value}</button>)}</div></div>)}</div><button className="primary wide" disabled={Object.keys(answers).length !== QUESTIONS.length} onClick={finishQuiz}>ステータスを決定する <ChevronRight size={18} /></button></section>}
       {screen === 'login' && <section className="screen narrow login-screen"><div className="quest-badge"><CircleUserRound size={28} /></div><p className="eyebrow">SAVE YOUR ADVENTURE</p><h2>冒険の記録を<br />保存しよう</h2><p className="muted">ログインすると成長ログを保存できます。ゲストは保存せずに遊べます。</p><form onSubmit={login} className="login-form"><label>メールアドレス<input type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label><label>パスワード<input type="password" placeholder="6文字以上" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength="6" /></label><button className="primary wide">{loginMode === 'login' ? 'ログインして保存する' : 'アカウントを作成'} <ChevronRight size={18} /></button></form><button className="guest-button" onClick={continueAsGuest}>ゲストとして遊ぶ（保存なし）</button><button className="text-button" onClick={() => setLoginMode(loginMode === 'login' ? 'signup' : 'login')}>{loginMode === 'login' ? 'はじめての方はこちら' : 'ログインはこちら'}</button><small>ゲストの進捗は、このブラウザを閉じると保存されません。</small></section>}
       {screen === 'home' && <section className="screen dashboard"><div className="dashboard-head"><div><p className="eyebrow">ADVENTURE STATUS</p><h2>おかえりなさい、<br /><em>{job?.id}</em>の冒険者。</h2></div><div className="level-orb"><span>LV</span><b>{progression.level}</b></div></div><div className="xp-row"><span>つぎのレベルまで</span><b>{progression.current}/{progression.required} EXP</b></div><div className="xp-bar"><i style={{ width: `${progression.current / progression.required * 100}%` }} /></div><div className="panel"><div className="panel-title"><span><Swords size={17} />ステータス</span><span className="job-chip" style={{ color: job?.color }}>{job?.icon} / {job?.id}</span></div><StatBars stats={state.stats} points={state.points} /></div><button className="quest-card" onClick={() => setScreen('log')}><span className="quest-icon">LOG</span><span><b>冒険の書</b><small>今日あったことを書いて、経験値を手に入れよう</small></span><ChevronRight /></button><div className="home-links"><button onClick={() => setScreen('history')}><BookOpen size={18} />成長のきろく <span>{state.logs.length}</span></button><button onClick={() => setScreen('jobs')}><Sparkles size={18} />職業を選び直す</button></div></section>}
